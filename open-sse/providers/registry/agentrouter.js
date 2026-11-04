@@ -38,14 +38,45 @@ export default {
       anthropicVersion: true,
     },
   },
+  // Multi-endpoint: chatCore picks the transport matching a model's
+  // declared targetFormat (see opencode-go's grok/gpt responses models).
+  // The Claude transport above stays the default for Claude models.
+  // GPT models must NOT go through /v1/messages: AgentRouter maps them
+  // internally to /v1/chat/completions, which rejects function tools +
+  // reasoning_effort (observed 400 for gpt-6.1-sol). Their lane is
+  // /v1/responses instead, with Bearer auth and no Claude headers.
+  transports: [
+    {
+      format: "claude",
+      baseUrl: "https://agentrouter.org/v1/messages",
+      urlSuffix: "?beta=true",
+      headers: { ...CLAUDE_CLI_SPOOF_HEADERS },
+      auth: {
+        combined: true,
+        header: "x-api-key",
+        scheme: "raw",
+        anthropicVersion: true,
+      },
+    },
+    {
+      format: "openai-responses",
+      baseUrl: "https://agentrouter.org/v1/responses",
+      auth: { combined: true, header: "Authorization", scheme: "bearer" },
+      thinkingFormat: "openai-responses",
+    },
+  ],
   // Seed catalogue (Claude models). Any other model id is still accepted
   // via passthroughModels, so agentrouter/<model> keeps working for ids
   // not listed here.
   models: [
-    { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5" },
-    { id: "claude-opus-4-5-20250929", name: "Claude Opus 4.5" },
-    { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
-    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku" },
+    // Served by /v1/responses only: declaring targetFormat forces chatCore
+    // past the Claude transport into translation to Responses, so tools +
+    // reasoning no longer hit the chat-completions rejection above.
+    // Other unlisted GPT ids still fall back to the Claude lane via
+    // passthroughModels — list them here the same way to move them over.
+    { id: "gpt-6.1-sol", name: "GPT 6.1 Sol", targetFormat: "openai-responses", supportedFormats: ["openai-responses"] },
+    { id: "gpt-6-astra", name: "GPT 6 Astra", targetFormat: "openai-responses", supportedFormats: ["openai-responses"] },
+    { id: "gpt-5.6-sol", name: "GPT 5.6 Sol", targetFormat: "openai-responses", supportedFormats: ["openai-responses"] },
   ],
   passthroughModels: true,
   serviceKinds: ["llm"],
