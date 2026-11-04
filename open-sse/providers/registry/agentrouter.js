@@ -44,7 +44,12 @@ export default {
   // GPT models must NOT go through /v1/messages: AgentRouter maps them
   // internally to /v1/chat/completions, which rejects function tools +
   // reasoning_effort (observed 400 for gpt-6.1-sol). Their lane is
-  // /v1/responses instead, with Bearer auth and no Claude headers.
+  // /v1/responses instead, with Bearer auth and Codex CLI identity
+  // headers, not Claude headers. AgentRouter gates on client identity
+  // before key validation, and a generic fetch client on /v1/responses
+  // gets 401 unauthorized_client_error even with a valid key (observed
+  // 2026-11-04). The Codex headers mirror 9router's own codex transport
+  // (open-sse/providers/registry/codex.js, version 0.159.0).
   transports: [
     {
       format: "claude",
@@ -61,6 +66,11 @@ export default {
     {
       format: "openai-responses",
       baseUrl: "https://agentrouter.org/v1/responses",
+      headers: {
+        originator: "codex_cli_rs",
+        "User-Agent": "codex_cli_rs/0.159.0",
+        version: "0.159.0",
+      },
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
       thinkingFormat: "openai-responses",
     },
