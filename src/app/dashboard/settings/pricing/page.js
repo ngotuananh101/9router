@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import Card from "@/shared/components/Card";
 import PricingModal from "@/shared/components/PricingModal";
 
+// NOTE: `export const dynamic` would be ignored here — this file is a client
+// component, and route config is only read from server components. The opt-out
+// for this route lives in ../layout.js.
+
 export default function PricingSettingsPage() {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
