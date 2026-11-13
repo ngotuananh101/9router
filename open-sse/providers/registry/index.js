@@ -1,4 +1,7 @@
 // Auto-generated: static imports for all registry entries
+// Fork-only entries live at the TOP of this file on purpose: upstream always
+// appends new providers at the END, so this region never conflicts on merge.
+import p999 from "./agentrouter.js";
 import p0 from "./alicode-intl.js";
 import p1 from "./alicode.js";
 import p2 from "./anthropic.js";
@@ -147,9 +150,11 @@ import p147 from "./veoaifree-web.js";
 import p151 from "./uc-web.js";
 import p152 from "./runcrate.js";
 import p153 from "./nace.js";
-import p154 from "./agentrouter.js";
+import p154 from "./sensenova-intl.js";
+import p155 from "./synthetic.js";
 export default [
   p0,
+  p999, // fork-only (agentrouter) — see import note above
   p1,
   p2,
   p3,
@@ -296,5 +301,6 @@ export default [
   p152,
   p153,
   p154,
+  p155,
 ];
 
