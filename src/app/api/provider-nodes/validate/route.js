@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertPublicUrl } from "@/shared/utils/ssrfGuard.js";
 import { isLocalRequest } from "@/dashboardGuard";
-import { normalizeUrlSuffix } from "@/lib/providerNormalization";
+import { normalizeCustomHeaders, normalizeUrlSuffix } from "@/lib/providerNormalization";
 
 // Fetch with timeout wrapper
 const fetchWithTimeout = (url, options, timeout = 10000) => {
@@ -56,7 +56,7 @@ const getChatErrorMessage = (status) => {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { baseUrl, apiKey, type, modelId, claudeFingerprint, urlSuffix, authHeader, customHeaders } = body;
+    const { baseUrl, apiKey, type, modelId, claudeFingerprint, codexFingerprint, urlSuffix, authHeader, customHeaders } = body;
 
     if (!baseUrl || !apiKey) {
       return NextResponse.json({ error: "Base URL and API key required" }, { status: 400 });
@@ -184,9 +184,21 @@ export async function POST(request) {
     }
 
     // OpenAI Compatible Validation (Default)
+    // A Codex-fingerprinted node probes with the same 3 headers the executor
+    // sends; auth and content negotiation stay executor-owned, so a stored
+    // Authorization never overrides the real key.
+    const RESERVED_CODEX_HEADERS = new Set(["authorization", "content-type", "accept"]);
+    const codexHeaders =
+      codexFingerprint === true
+        ? Object.fromEntries(
+            Object.entries(normalizeCustomHeaders(customHeaders)).filter(
+              ([name]) => !RESERVED_CODEX_HEADERS.has(String(name).toLowerCase()),
+            ),
+          )
+        : {};
     const modelsUrl = `${baseUrl.replace(/\/$/, "")}/models`;
     const res = await fetchWithTimeout(modelsUrl, {
-      headers: { "Authorization": `Bearer ${apiKey}` },
+      headers: { "Authorization": `Bearer ${apiKey}`, ...codexHeaders },
     });
 
     if (res.ok) return NextResponse.json({ valid: true });
@@ -196,8 +208,32 @@ export async function POST(request) {
       return NextResponse.json({ valid: false, error: "API key unauthorized" });
     }
 
-    // Fallback: try chat/completions if modelId provided
+    // Fallback: try /responses if modelId provided and the node is Codex-fingerprinted;
+    // otherwise try chat/completions.
     if (modelId) {
+      if (codexFingerprint === true) {
+        const responsesRes = await fetchWithTimeout(`${baseUrl.replace(/\/$/, "")}/responses`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            ...codexHeaders,
+          },
+          body: JSON.stringify({
+            model: modelId,
+            input: "ping",
+            max_output_tokens: 1,
+          }),
+        });
+        if (responsesRes.ok) {
+          return NextResponse.json({ valid: true, method: "responses" });
+        }
+        return NextResponse.json({
+          valid: false,
+          error: getChatErrorMessage(responsesRes.status),
+          method: "responses",
+        });
+      }
       const chatRes = await fetchWithTimeout(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: {

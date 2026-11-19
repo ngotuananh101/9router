@@ -81,6 +81,155 @@ describe("Provider Validation API", () => {
       expect(res.ok).toBe(false);
       // Expected error: "/models unavailable - provide model ID for chat validation"
     });
+
+    it("sends the Codex headers on the /models probe when codexFingerprint is on", async () => {
+      vi.resetModules();
+      vi.doMock("next/server", () => ({
+        NextResponse: {
+          json(body, init = {}) {
+            return new Response(JSON.stringify(body), {
+              status: init.status || 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          },
+        },
+      }));
+      vi.doMock("@/dashboardGuard", () => ({ isLocalRequest: () => true }));
+      const { POST } = await import("@/app/api/provider-nodes/validate/route.js");
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+
+      const request = new Request("http://localhost:3000/api/provider-nodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: "https://gw.example/v1",
+          apiKey: "test-key",
+          type: "openai-compatible",
+          codexFingerprint: true,
+          customHeaders: {
+            originator: "codex_cli_rs",
+            "User-Agent": "codex_cli_rs/0.167.1",
+            version: "0.167.1",
+          },
+        }),
+      });
+      const response = await POST(request);
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.valid).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://gw.example/v1/models",
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: "Bearer test-key",
+            originator: "codex_cli_rs",
+            "User-Agent": "codex_cli_rs/0.167.1",
+            version: "0.167.1",
+          }),
+        }),
+      );
+    });
+
+    it("falls back to /responses with a ping input when codexFingerprint is on and /models fails", async () => {
+      vi.resetModules();
+      vi.doMock("next/server", () => ({
+        NextResponse: {
+          json(body, init = {}) {
+            return new Response(JSON.stringify(body), {
+              status: init.status || 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          },
+        },
+      }));
+      vi.doMock("@/dashboardGuard", () => ({ isLocalRequest: () => true }));
+      const { POST } = await import("@/app/api/provider-nodes/validate/route.js");
+      global.fetch = vi.fn().mockImplementation((url) => {
+        if (url.includes("/models")) return Promise.resolve({ ok: false, status: 404 });
+        if (url.includes("/responses")) return Promise.resolve({ ok: true, json: async () => ({}) });
+        return Promise.reject(new Error("Unknown URL"));
+      });
+
+      const request = new Request("http://localhost:3000/api/provider-nodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: "https://gw.example/v1",
+          apiKey: "test-key",
+          type: "openai-compatible",
+          modelId: "gpt-5",
+          codexFingerprint: true,
+          customHeaders: {
+            originator: "codex_cli_rs",
+            "User-Agent": "codex_cli_rs/0.167.1",
+            version: "0.167.1",
+          },
+        }),
+      });
+      const response = await POST(request);
+      const body = await response.json();
+
+      expect(body.valid).toBe(true);
+      expect(body.method).toBe("responses");
+      const responsesCall = global.fetch.mock.calls.find(([url]) => url.includes("/responses"));
+      expect(responsesCall[0]).toBe("https://gw.example/v1/responses");
+      expect(JSON.parse(responsesCall[1].body)).toEqual({
+        model: "gpt-5",
+        input: "ping",
+        max_output_tokens: 1,
+      });
+      expect(responsesCall[1].headers.Authorization).toBe("Bearer test-key");
+      expect(responsesCall[1].headers.originator).toBe("codex_cli_rs");
+      expect(responsesCall[1].headers["User-Agent"]).toBe("codex_cli_rs/0.167.1");
+      expect(responsesCall[1].headers.version).toBe("0.167.1");
+      expect(global.fetch.mock.calls.find(([url]) => url.includes("/chat/completions"))).toBeUndefined();
+    });
+
+    it("does not try /responses without a modelId when the Codex /models probe fails", async () => {
+      vi.resetModules();
+      vi.doMock("next/server", () => ({
+        NextResponse: {
+          json(body, init = {}) {
+            return new Response(JSON.stringify(body), {
+              status: init.status || 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          },
+        },
+      }));
+      vi.doMock("@/dashboardGuard", () => ({ isLocalRequest: () => true }));
+      const { POST } = await import("@/app/api/provider-nodes/validate/route.js");
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+
+      const request = new Request("http://localhost:3000/api/provider-nodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: "https://gw.example/v1",
+          apiKey: "test-key",
+          type: "openai-compatible",
+          codexFingerprint: true,
+          customHeaders: {
+            originator: "codex_cli_rs",
+            "User-Agent": "codex_cli_rs/0.167.1",
+            version: "0.167.1",
+          },
+        }),
+      });
+      const response = await POST(request);
+      const body = await response.json();
+
+      expect(body.valid).toBe(false);
+      expect(body.error).toBe("/models endpoint not found - try chat validation with model ID");
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://gw.example/v1/models",
+        expect.objectContaining({
+          headers: expect.objectContaining({ originator: "codex_cli_rs" }),
+        }),
+      );
+    });
   });
 
   describe("Anthropic Compatible", () => {
