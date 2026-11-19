@@ -43,3 +43,27 @@ export function normalizeProviderSpecificData(provider, body = {}, providerSpeci
 
   return Object.keys(next).length > 0 ? next : null;
 }
+
+/**
+ * Build providerSpecificData for a compatible connection from its node.
+ * Single source for node-to-connection copying, used by the node and
+ * connection routes so a new key or a node edit inherits the same data.
+ * @param {object} node
+ * @returns {object}
+ */
+export function compatibleNodeToProviderSpecificData(node) {
+  const data = {
+    prefix: node?.prefix,
+    baseUrl: node?.baseUrl,
+    nodeName: node?.name,
+    claudeFingerprint: Boolean(node?.claudeFingerprint),
+    urlSuffix: typeof node?.urlSuffix === "string" ? node.urlSuffix : "",
+    authHeader: node?.authHeader === "bearer" ? "bearer" : "x-api-key",
+    customHeaders:
+      node?.customHeaders && typeof node.customHeaders === "object"
+        ? { ...node.customHeaders }
+        : {},
+  };
+  if (node?.apiType) data.apiType = node.apiType;
+  return data;
+}

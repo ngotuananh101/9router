@@ -62,6 +62,10 @@ export async function createProviderNode(data) {
     prefix: data.prefix,
     apiType: data.apiType,
     baseUrl: data.baseUrl,
+    claudeFingerprint: data.claudeFingerprint,
+    urlSuffix: data.urlSuffix,
+    authHeader: data.authHeader,
+    customHeaders: data.customHeaders,
     createdAt: now,
     updatedAt: now,
   };
