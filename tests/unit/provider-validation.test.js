@@ -120,6 +120,51 @@ describe("Provider Validation API", () => {
         }),
       }));
     });
+
+    it("sends the fingerprint headers and urlSuffix on the /models probe when claudeFingerprint is on", async () => {
+      vi.resetModules();
+      vi.doMock("next/server", () => ({
+        NextResponse: {
+          json(body, init = {}) {
+            return new Response(JSON.stringify(body), {
+              status: init.status || 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          },
+        },
+      }));
+      vi.doMock("@/dashboardGuard", () => ({ isLocalRequest: () => true }));
+      const { POST } = await import("@/app/api/provider-nodes/validate/route.js");
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+
+      const request = new Request("http://localhost:3000/api/provider-nodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: "https://agentrouter.org/v1",
+          apiKey: "test-key",
+          type: "anthropic-compatible",
+          claudeFingerprint: true,
+          urlSuffix: "?beta=true",
+          authHeader: "x-api-key",
+          customHeaders: { "X-App": "cli", "x-api-key": "stolen" },
+        }),
+      });
+      const response = await POST(request);
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.valid).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://agentrouter.org/v1/models?beta=true",
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "X-App": "cli",
+            "x-api-key": "test-key",
+          }),
+        }),
+      );
+    });
   });
 
   describe("Error Messages - Network", () => {

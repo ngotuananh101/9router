@@ -55,7 +55,7 @@ const getChatErrorMessage = (status) => {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { baseUrl, apiKey, type, modelId } = body;
+    const { baseUrl, apiKey, type, modelId, claudeFingerprint, urlSuffix, customHeaders } = body;
 
     if (!baseUrl || !apiKey) {
       return NextResponse.json({ error: "Base URL and API key required" }, { status: 400 });
@@ -111,14 +111,30 @@ export async function POST(request) {
       if (normalizedBase.endsWith("/messages")) {
         normalizedBase = normalizedBase.slice(0, -9);
       }
+      const RESERVED_FINGERPRINT_HEADERS = new Set([
+        "x-api-key",
+        "authorization",
+        "content-type",
+        "accept",
+      ]);
+      const fingerprintHeaders =
+        claudeFingerprint === true && customHeaders && typeof customHeaders === "object" && !Array.isArray(customHeaders)
+          ? Object.fromEntries(
+              Object.entries(customHeaders).filter(
+                ([name]) => !RESERVED_FINGERPRINT_HEADERS.has(String(name).toLowerCase()),
+              ),
+            )
+          : {};
+      const fingerprintSuffix = claudeFingerprint === true && typeof urlSuffix === "string" ? urlSuffix : "";
 
-      const modelsUrl = `${normalizedBase}/models`;
+      const modelsUrl = `${normalizedBase}/models${fingerprintSuffix}`;
       const res = await fetchWithTimeout(modelsUrl, {
         method: "GET",
         headers: {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          ...fingerprintHeaders
         }
       });
 
@@ -131,13 +147,14 @@ export async function POST(request) {
 
       // Fallback: try chat/completions if modelId provided
       if (modelId) {
-        const chatRes = await fetchWithTimeout(`${normalizedBase}/chat/completions`, {
+        const chatRes = await fetchWithTimeout(`${normalizedBase}/chat/completions${fingerprintSuffix}`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/json",
             "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01"
+            "anthropic-version": "2023-06-01",
+            ...fingerprintHeaders
           },
           body: JSON.stringify({
             model: modelId,
