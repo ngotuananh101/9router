@@ -141,7 +141,11 @@ export async function POST(request) {
         baseUrl: node.baseUrl,
         nodeName: node.name,
         codexFingerprint: Boolean(node.codexFingerprint),
-        customHeaders: normalizeCustomHeaders(node.customHeaders),
+        // Headers only travel while the switch is on: a node without headers
+        // must not gain an empty customHeaders (same rule as the PUT sync).
+        ...(node.codexFingerprint === true
+          ? { customHeaders: normalizeCustomHeaders(node.customHeaders) }
+          : {}),
       };
     } else if (isAnthropicCompatibleProvider(provider)) {
       const node = await getProviderNodeById(provider);

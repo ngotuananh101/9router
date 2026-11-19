@@ -249,7 +249,7 @@ describe("compatible provider connections API", () => {
     });
   });
 
-  it("gives a new connection codexFingerprint false and empty customHeaders when the node flag is off", async () => {
+  it("gives a new connection codexFingerprint false and no customHeaders when the node flag is off", async () => {
     const ctx = await setupTestContext({
       id: "openai-compatible-responses-plain",
       type: "openai-compatible",
@@ -268,7 +268,7 @@ describe("compatible provider connections API", () => {
     expect(storedConnections).toHaveLength(1);
     expect(body.connection.providerSpecificData).toMatchObject({
       codexFingerprint: false,
-      customHeaders: {},
     });
+    expect(body.connection.providerSpecificData.customHeaders).toBeUndefined();
   });
 });
