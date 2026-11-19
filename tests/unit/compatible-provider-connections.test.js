@@ -203,4 +203,72 @@ describe("compatible provider connections API", () => {
       customHeaders: { "X-App": "cli" },
     });
   });
+
+  it("copies the Codex fingerprint fields from an OpenAI-compatible node to the new connection", async () => {
+    const ctx = await setupTestContext({
+      id: "openai-compatible-responses-fingerprint",
+      type: "openai-compatible",
+      name: "Codex Fingerprint Node",
+      prefix: "cxf",
+      apiType: "responses",
+      baseUrl: "https://gw.example/v1",
+      codexFingerprint: true,
+      customHeaders: {
+        originator: "codex_cli_rs",
+        "User-Agent": "codex_cli_rs/0.167.1",
+        version: "0.167.1",
+      },
+    });
+    cleanup = ctx.cleanup;
+
+    const response = await ctx.POST(makeRequest(ctx.node.id));
+    const body = await response.json();
+    const storedConnections = await ctx.getProviderConnections({ provider: ctx.node.id });
+
+    expect(response.status).toBe(201);
+    expect(storedConnections).toHaveLength(1);
+    expect(body.connection.providerSpecificData).toMatchObject({
+      prefix: "cxf",
+      apiType: "responses",
+      baseUrl: "https://gw.example/v1",
+      nodeName: "Codex Fingerprint Node",
+      codexFingerprint: true,
+      customHeaders: {
+        originator: "codex_cli_rs",
+        "User-Agent": "codex_cli_rs/0.167.1",
+        version: "0.167.1",
+      },
+    });
+    expect(storedConnections[0].providerSpecificData).toMatchObject({
+      codexFingerprint: true,
+      customHeaders: {
+        originator: "codex_cli_rs",
+        "User-Agent": "codex_cli_rs/0.167.1",
+        version: "0.167.1",
+      },
+    });
+  });
+
+  it("gives a new connection codexFingerprint false and empty customHeaders when the node flag is off", async () => {
+    const ctx = await setupTestContext({
+      id: "openai-compatible-responses-plain",
+      type: "openai-compatible",
+      name: "Plain Codex Node",
+      prefix: "cxp",
+      apiType: "responses",
+      baseUrl: "https://gw.example/v1",
+    });
+    cleanup = ctx.cleanup;
+
+    const response = await ctx.POST(makeRequest(ctx.node.id));
+    const body = await response.json();
+    const storedConnections = await ctx.getProviderConnections({ provider: ctx.node.id });
+
+    expect(response.status).toBe(201);
+    expect(storedConnections).toHaveLength(1);
+    expect(body.connection.providerSpecificData).toMatchObject({
+      codexFingerprint: false,
+      customHeaders: {},
+    });
+  });
 });
