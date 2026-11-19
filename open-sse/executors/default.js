@@ -173,7 +173,8 @@ export class DefaultExecutor extends BaseExecutor {
     if (this.provider?.startsWith?.("anthropic-compatible-")) {
       const baseUrl = credentials?.providerSpecificData?.baseUrl || ANTHROPIC_COMPAT_BASE;
       const normalized = baseUrl.replace(/\/$/, "");
-      return `${normalized}/messages`;
+      const urlSuffix = credentials?.providerSpecificData?.urlSuffix || "";
+      return `${normalized}/messages${urlSuffix}`;
     }
     // gemini-format: build :streamGenerateContent / :generateContent path
     if (this.config.format === "gemini") {
@@ -238,8 +239,16 @@ export class DefaultExecutor extends BaseExecutor {
       }
     }
 
+    // A node opted into the Claude Code fingerprint keeps its identity headers:
+    // the strip block below is skipped and the stored custom headers are
+    // merged instead (see the fingerprint block after it).
+    const fingerprint = credentials?.providerSpecificData?.claudeFingerprint === true
+      && this.provider?.startsWith?.("anthropic-compatible-")
+      ? credentials.providerSpecificData
+      : null;
+
     // Strip first-party Claude Code identity headers for non-Anthropic anthropic-compatible upstreams
-    if (this.provider?.startsWith?.("anthropic-compatible-")) {
+    if (this.provider?.startsWith?.("anthropic-compatible-") && !fingerprint) {
       const baseUrl = credentials?.providerSpecificData?.baseUrl || "";
       const isOfficialAnthropic = baseUrl === "" || baseUrl.includes("api.anthropic.com");
       if (!isOfficialAnthropic) {
@@ -267,6 +276,29 @@ export class DefaultExecutor extends BaseExecutor {
               delete headers[betaKey];
             }
           }
+        }
+      }
+    }
+
+    if (fingerprint) {
+      const baseUrl = fingerprint.baseUrl || "";
+      const isOfficialAnthropic = baseUrl === "" || baseUrl.includes("api.anthropic.com");
+      if (fingerprint.authHeader === "bearer") {
+        delete headers["x-api-key"];
+        if (credentials.apiKey) headers["Authorization"] = `Bearer ${credentials.apiKey}`;
+      } else if (!isOfficialAnthropic && credentials.apiKey && !headers["Authorization"]) {
+        // x-api-key mode keeps the current behavior, including the extra
+        // Bearer <redacted> third-party gateways that read either header.
+        headers["Authorization"] = `Bearer ${credentials.apiKey}`;
+      }
+      // Custom headers win over everything computed above, except auth and
+      // content negotiation, which the executor always owns.
+      const reserved = new Set(["x-api-key", "authorization", "content-type", "accept"]);
+      const customHeaders = fingerprint.customHeaders;
+      if (customHeaders && typeof customHeaders === "object") {
+        for (const [name, value] of Object.entries(customHeaders)) {
+          if (typeof name !== "string" || reserved.has(name.toLowerCase())) continue;
+          headers[name] = value;
         }
       }
     }
