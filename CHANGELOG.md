@@ -2,6 +2,7 @@
 
 ## Features
 - **Compatible providers**: add a "Send as Claude Code" switch to Anthropic-compatible provider nodes, sending requests with the full Claude Code fingerprint (URL suffix, auth header, custom headers) so gateways that only accept original Claude Code requests work without a new built-in provider
+- **Compatible providers**: add a "Send as Codex" switch to OpenAI-compatible provider nodes with API Type Responses, sending requests with the full Codex CLI fingerprint (originator, User-Agent, version) so gateways that only accept original Codex requests work without a new built-in provider; the custom-headers editor is removed from both compatible modals, keeping only the switch (plus URL suffix and auth fields on Claude)
 
 # v0.5.119 (2026-11-11)
 

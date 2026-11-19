@@ -1,7 +1,7 @@
 # Custom compatible: Claude Code fingerprint switch
 
 Date: 2026-11-19
-Status: approved 2026-11-19, implemented 2026-11-19 on branch feat/claude-fingerprint-compatible, plan at docs/superpowers/plans/2026-11-19-custom-compatible-claude-fingerprint.md
+Status: approved 2026-11-19, implemented 2026-11-19 on branch feat/claude-fingerprint-compatible, plan at docs/superpowers/plans/2026-11-19-custom-compatible-claude-fingerprint.md; amendment 2026-11-19 (Codex fingerprint): the custom-headers rows editor was removed from both compatible modals — the switch, URL suffix and auth fields remain, and the stored preset is applied invisibly on every turn-on
 Scope: Anthropic-compatible provider nodes only
 
 ## Intent and why
