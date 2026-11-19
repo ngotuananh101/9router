@@ -1,3 +1,8 @@
+# Unreleased
+
+## Features
+- **Compatible providers**: add a "Send as Claude Code" switch to Anthropic-compatible provider nodes, sending requests with the full Claude Code fingerprint (URL suffix, auth header, custom headers) so gateways that only accept original Claude Code requests work without a new built-in provider
+
 # v0.5.119 (2026-11-11)
 
 ## Features
