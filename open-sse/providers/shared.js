@@ -52,6 +52,16 @@ export const CLAUDE_CLI_SPOOF_HEADERS = {
   "X-Stainless-Timeout": "600"
 };
 
+// Fingerprint defaults for custom Anthropic-compatible nodes: the AgentRouter preset.
+// Returns a fresh object on every call so callers can edit it without mutating the shared constant.
+export function getClaudeFingerprintDefaults() {
+  return {
+    urlSuffix: "?beta=true",
+    authHeader: "x-api-key",
+    customHeaders: { ...CLAUDE_CLI_SPOOF_HEADERS },
+  };
+}
+
 const ANTHROPIC_BETA_BASE = [
   "claude-code-20250219",
   "oauth-2025-04-20",
