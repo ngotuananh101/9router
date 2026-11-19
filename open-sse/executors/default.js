@@ -310,6 +310,29 @@ export class DefaultExecutor extends BaseExecutor {
       }
     }
 
+    // A node opted into the Codex fingerprint sends the fixed Codex CLI
+    // identity headers (originator / User-Agent / version). No apiType check:
+    // the modal only offers the switch for responses nodes, but the executor
+    // merges whenever the flag is on.
+    const codexFingerprint = credentials?.providerSpecificData?.codexFingerprint === true
+      && this.provider?.startsWith?.("openai-compatible-")
+      ? credentials.providerSpecificData
+      : null;
+
+    if (codexFingerprint) {
+      // Custom headers win over everything computed above, except auth and
+      // content negotiation, which the executor always owns. originator,
+      // User-Agent and version are the fingerprint itself, not reserved.
+      const reserved = new Set(["authorization", "content-type", "accept"]);
+      const customHeaders = codexFingerprint.customHeaders;
+      if (customHeaders && typeof customHeaders === "object") {
+        for (const [name, value] of Object.entries(customHeaders)) {
+          if (typeof name !== "string" || typeof value !== "string" || reserved.has(name.toLowerCase())) continue;
+          headers[name] = value;
+        }
+      }
+    }
+
     if (stream) headers["Accept"] = "text/event-stream";
     return headers;
   }
