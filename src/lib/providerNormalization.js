@@ -87,6 +87,7 @@ export function compatibleNodeToProviderSpecificData(node) {
     baseUrl: node?.baseUrl,
     nodeName: node?.name,
     claudeFingerprint: Boolean(node?.claudeFingerprint),
+    codexFingerprint: Boolean(node?.codexFingerprint),
     urlSuffix: normalizeUrlSuffix(node?.urlSuffix),
     authHeader: node?.authHeader === "bearer" ? "bearer" : "x-api-key",
     customHeaders: normalizeCustomHeaders(node?.customHeaders),

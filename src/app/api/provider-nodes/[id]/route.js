@@ -11,7 +11,7 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, prefix, apiType, baseUrl, claudeFingerprint, urlSuffix, authHeader, customHeaders } = body;
+    const { name, prefix, apiType, baseUrl, claudeFingerprint, codexFingerprint, urlSuffix, authHeader, customHeaders } = body;
     const node = await getProviderNodeById(id);
 
     if (!node) {
@@ -76,18 +76,48 @@ export async function PUT(request, { params }) {
       if (customHeaders !== undefined) updates.customHeaders = normalizeCustomHeaders(customHeaders);
     }
 
+    // Codex fingerprint fields live on OpenAI-compatible nodes only.
+    if (node.type === "openai-compatible") {
+      // Only overwrite fields the caller sent: a partial update (or a stale
+      // caller) must not silently wipe a stored fingerprint. customHeaders is
+      // shared storage, so it is only written when the caller is managing the
+      // Codex fingerprint (codexFingerprint present in the body); otherwise a
+      // Claude caller's headers would leak onto openai nodes.
+      if (codexFingerprint !== undefined) updates.codexFingerprint = codexFingerprint === true;
+      if (codexFingerprint !== undefined && customHeaders !== undefined) {
+        updates.customHeaders = normalizeCustomHeaders(customHeaders);
+      }
+    }
+
     const updated = await updateProviderNode(id, updates);
 
     const connections = await getProviderConnections({ provider: id });
     await Promise.all(connections.map((connection) => {
-      const syncData = node.type === "anthropic-compatible"
-        ? compatibleNodeToProviderSpecificData(updated)
-        : {
-            prefix: prefix.trim(),
-            apiType: node.type === "openai-compatible" ? apiType : undefined,
-            baseUrl: sanitizedBaseUrl,
-            nodeName: updated.name,
-          };
+      let syncData;
+      if (node.type === "anthropic-compatible") {
+        syncData = compatibleNodeToProviderSpecificData(updated);
+      } else if (node.type === "openai-compatible") {
+        syncData = {
+          prefix: prefix.trim(),
+          apiType,
+          baseUrl: sanitizedBaseUrl,
+          nodeName: updated.name,
+          codexFingerprint: Boolean(updated.codexFingerprint),
+          // Headers only travel while the switch is on: when it is off the
+          // connection keeps whatever it had (inert), and a node without
+          // headers must not gain an empty customHeaders.
+          ...(updated.codexFingerprint === true
+            ? { customHeaders: normalizeCustomHeaders(updated.customHeaders) }
+            : {}),
+        };
+      } else {
+        syncData = {
+          prefix: prefix.trim(),
+          apiType: undefined,
+          baseUrl: sanitizedBaseUrl,
+          nodeName: updated.name,
+        };
+      }
       return updateProviderConnection(connection.id, {
         providerSpecificData: {
           ...(connection.providerSpecificData || {}),
