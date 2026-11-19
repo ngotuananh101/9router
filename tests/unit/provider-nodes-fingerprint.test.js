@@ -118,4 +118,50 @@ describe("provider nodes with Claude fingerprint fields", () => {
       customHeaders: { "X-App": "cli" },
     });
   });
+
+  it("compatibleNodeToProviderSpecificData normalizes a bare urlSuffix", async () => {
+    const { compatibleNodeToProviderSpecificData } = await import(
+      "@/lib/providerNormalization.js"
+    );
+
+    expect(
+      compatibleNodeToProviderSpecificData({
+        name: "Bare",
+        prefix: "bare",
+        baseUrl: "https://example.com/v1",
+        urlSuffix: "beta=true",
+      }).urlSuffix,
+    ).toBe("?beta=true");
+    expect(
+      compatibleNodeToProviderSpecificData({
+        name: "Amp",
+        prefix: "amp",
+        baseUrl: "https://example.com/v1",
+        urlSuffix: "&beta=true",
+      }).urlSuffix,
+    ).toBe("&beta=true");
+    expect(
+      compatibleNodeToProviderSpecificData({
+        name: "Blank",
+        prefix: "blank",
+        baseUrl: "https://example.com/v1",
+        urlSuffix: "   ",
+      }).urlSuffix,
+    ).toBe("");
+  });
+
+  it("compatibleNodeToProviderSpecificData drops non-string custom header values", async () => {
+    const { compatibleNodeToProviderSpecificData } = await import(
+      "@/lib/providerNormalization.js"
+    );
+
+    const mapped = compatibleNodeToProviderSpecificData({
+      name: "Mixed",
+      prefix: "mixed",
+      baseUrl: "https://example.com/v1",
+      customHeaders: { "X-App": "cli", "X-Count": 3, "X-Flag": true, "X-Null": null },
+    });
+
+    expect(mapped.customHeaders).toEqual({ "X-App": "cli" });
+  });
 });

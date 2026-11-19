@@ -173,7 +173,12 @@ export class DefaultExecutor extends BaseExecutor {
     if (this.provider?.startsWith?.("anthropic-compatible-")) {
       const baseUrl = credentials?.providerSpecificData?.baseUrl || ANTHROPIC_COMPAT_BASE;
       const normalized = baseUrl.replace(/\/$/, "");
-      const urlSuffix = credentials?.providerSpecificData?.urlSuffix || "";
+      // The suffix belongs to the fingerprint: with the switch off the node
+      // must behave exactly as before (no ?beta=true leaking into the URL).
+      const psd = credentials?.providerSpecificData;
+      const urlSuffix = psd?.claudeFingerprint === true && typeof psd.urlSuffix === "string"
+        ? psd.urlSuffix
+        : "";
       return `${normalized}/messages${urlSuffix}`;
     }
     // gemini-format: build :streamGenerateContent / :generateContent path
@@ -293,11 +298,13 @@ export class DefaultExecutor extends BaseExecutor {
       }
       // Custom headers win over everything computed above, except auth and
       // content negotiation, which the executor always owns.
-      const reserved = new Set(["x-api-key", "authorization", "content-type", "accept"]);
+      // anthropic-version is owned by the executor too (applyAuth sets it
+      // lowercase); a stored copy would only duplicate the header.
+      const reserved = new Set(["x-api-key", "authorization", "content-type", "accept", "anthropic-version"]);
       const customHeaders = fingerprint.customHeaders;
       if (customHeaders && typeof customHeaders === "object") {
         for (const [name, value] of Object.entries(customHeaders)) {
-          if (typeof name !== "string" || reserved.has(name.toLowerCase())) continue;
+          if (typeof name !== "string" || typeof value !== "string" || reserved.has(name.toLowerCase())) continue;
           headers[name] = value;
         }
       }

@@ -45,6 +45,36 @@ export function normalizeProviderSpecificData(provider, body = {}, providerSpeci
 }
 
 /**
+ * Normalize a stored URL suffix so it always parses as a query string:
+ * "beta=true" becomes "?beta=true"; "?beta=true" and "&beta=true" pass
+ * through; anything else becomes "".
+ * @param {unknown} urlSuffix
+ * @returns {string}
+ */
+export function normalizeUrlSuffix(urlSuffix) {
+  if (typeof urlSuffix !== "string") return "";
+  const trimmed = urlSuffix.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("?") || trimmed.startsWith("&") ? trimmed : `?${trimmed}`;
+}
+
+/**
+ * Keep only string-valued custom headers: undici fetch throws on
+ * non-string header values, so a corrupted stored row must not break
+ * every request for the connection.
+ * @param {unknown} customHeaders
+ * @returns {object}
+ */
+export function normalizeCustomHeaders(customHeaders) {
+  if (!customHeaders || typeof customHeaders !== "object" || Array.isArray(customHeaders)) return {};
+  return Object.fromEntries(
+    Object.entries(customHeaders).filter(
+      ([name, value]) => typeof name === "string" && typeof value === "string",
+    ),
+  );
+}
+
+/**
  * Build providerSpecificData for a compatible connection from its node.
  * Single source for node-to-connection copying, used by the node and
  * connection routes so a new key or a node edit inherits the same data.
@@ -57,12 +87,9 @@ export function compatibleNodeToProviderSpecificData(node) {
     baseUrl: node?.baseUrl,
     nodeName: node?.name,
     claudeFingerprint: Boolean(node?.claudeFingerprint),
-    urlSuffix: typeof node?.urlSuffix === "string" ? node.urlSuffix : "",
+    urlSuffix: normalizeUrlSuffix(node?.urlSuffix),
     authHeader: node?.authHeader === "bearer" ? "bearer" : "x-api-key",
-    customHeaders:
-      node?.customHeaders && typeof node.customHeaders === "object"
-        ? { ...node.customHeaders }
-        : {},
+    customHeaders: normalizeCustomHeaders(node?.customHeaders),
   };
   if (node?.apiType) data.apiType = node.apiType;
   return data;

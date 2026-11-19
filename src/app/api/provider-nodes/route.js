@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createProviderNode, getProviderNodes } from "@/models";
 import { OPENAI_COMPATIBLE_PREFIX, ANTHROPIC_COMPATIBLE_PREFIX, CUSTOM_EMBEDDING_PREFIX } from "@/shared/constants/providers";
 import { generateId } from "@/shared/utils";
+import { normalizeCustomHeaders, normalizeUrlSuffix } from "@/lib/providerNormalization";
 
 export const dynamic = "force-dynamic";
 
@@ -97,12 +98,9 @@ export async function POST(request) {
         baseUrl: sanitizedBaseUrl,
         name: name.trim(),
         claudeFingerprint: claudeFingerprint === true,
-        urlSuffix: typeof urlSuffix === "string" ? urlSuffix.trim() : "",
+        urlSuffix: normalizeUrlSuffix(urlSuffix),
         authHeader: authHeader === "bearer" ? "bearer" : "x-api-key",
-        customHeaders:
-          customHeaders && typeof customHeaders === "object" && !Array.isArray(customHeaders)
-            ? { ...customHeaders }
-            : {},
+        customHeaders: normalizeCustomHeaders(customHeaders),
       });
       return NextResponse.json({ node }, { status: 201 });
     }

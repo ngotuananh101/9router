@@ -71,11 +71,12 @@ describe("DefaultExecutor with Claude fingerprint on anthropic-compatible nodes"
     expect(headers["X-App"]).toBe("cli");
   });
 
-  it("appends urlSuffix after /messages in buildUrl", () => {
+  it("appends urlSuffix after /messages in buildUrl when the fingerprint switch is on", () => {
     const executor = new DefaultExecutor("anthropic-compatible-custom");
     const url = executor.buildUrl("claude-sonnet-4-5", true, 0, {
       providerSpecificData: {
         baseUrl: "https://agentrouter.org/v1",
+        claudeFingerprint: true,
         urlSuffix: "?beta=true",
       },
     });
@@ -90,6 +91,48 @@ describe("DefaultExecutor with Claude fingerprint on anthropic-compatible nodes"
     });
 
     expect(url).toBe("https://agentrouter.org/v1/messages");
+  });
+
+  it("does not append urlSuffix when the fingerprint switch is off", () => {
+    const executor = new DefaultExecutor("anthropic-compatible-custom");
+    const url = executor.buildUrl("claude-sonnet-4-5", true, 0, {
+      providerSpecificData: {
+        baseUrl: "https://agentrouter.org/v1",
+        claudeFingerprint: false,
+        urlSuffix: "?beta=true",
+      },
+    });
+
+    expect(url).toBe("https://agentrouter.org/v1/messages");
+  });
+
+  it("does not duplicate anthropic-version when the fingerprint carries it", () => {
+    const executor = new DefaultExecutor("anthropic-compatible-custom");
+    const headers = executor.buildHeaders(
+      fingerprintedCredentials({ customHeaders: { "X-App": "cli", "Anthropic-Version": "2023-06-01" } }),
+      true,
+      undefined,
+      "claude-sonnet-4-5",
+    );
+
+    expect(Object.keys(headers).filter((k) => k.toLowerCase() === "anthropic-version")).toEqual([
+      "anthropic-version",
+    ]);
+    expect(headers["anthropic-version"]).toBe("2023-06-01");
+    expect(headers["X-App"]).toBe("cli");
+  });
+
+  it("skips non-string custom header values instead of breaking the request", () => {
+    const executor = new DefaultExecutor("anthropic-compatible-custom");
+    const headers = executor.buildHeaders(
+      fingerprintedCredentials({ customHeaders: { "X-App": "cli", "X-Count": 3 } }),
+      true,
+      undefined,
+      "claude-sonnet-4-5",
+    );
+
+    expect(headers["X-App"]).toBe("cli");
+    expect(headers["X-Count"]).toBeUndefined();
   });
 
   it("still strips identity headers when the fingerprint flag is absent", () => {

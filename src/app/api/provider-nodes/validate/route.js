@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertPublicUrl } from "@/shared/utils/ssrfGuard.js";
 import { isLocalRequest } from "@/dashboardGuard";
+import { normalizeUrlSuffix } from "@/lib/providerNormalization";
 
 // Fetch with timeout wrapper
 const fetchWithTimeout = (url, options, timeout = 10000) => {
@@ -55,7 +56,7 @@ const getChatErrorMessage = (status) => {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { baseUrl, apiKey, type, modelId, claudeFingerprint, urlSuffix, customHeaders } = body;
+    const { baseUrl, apiKey, type, modelId, claudeFingerprint, urlSuffix, authHeader, customHeaders } = body;
 
     if (!baseUrl || !apiKey) {
       return NextResponse.json({ error: "Base URL and API key required" }, { status: 400 });
@@ -116,24 +117,32 @@ export async function POST(request) {
         "authorization",
         "content-type",
         "accept",
+        // The probe already sets anthropic-version (lowercase).
+        "anthropic-version",
       ]);
       const fingerprintHeaders =
         claudeFingerprint === true && customHeaders && typeof customHeaders === "object" && !Array.isArray(customHeaders)
           ? Object.fromEntries(
               Object.entries(customHeaders).filter(
-                ([name]) => !RESERVED_FINGERPRINT_HEADERS.has(String(name).toLowerCase()),
+                ([name, value]) =>
+                  typeof value === "string" &&
+                  !RESERVED_FINGERPRINT_HEADERS.has(String(name).toLowerCase()),
               ),
             )
           : {};
-      const fingerprintSuffix = claudeFingerprint === true && typeof urlSuffix === "string" ? urlSuffix : "";
+      const fingerprintSuffix = claudeFingerprint === true ? normalizeUrlSuffix(urlSuffix) : "";
+      // Auth shape must match real requests: bearer mode sends Authorization
+      // only (the executor deletes x-api-key); x-api-key mode sends both.
+      const probeAuthHeaders = authHeader === "bearer"
+        ? { Authorization: `Bearer ${apiKey}` }
+        : { "x-api-key": apiKey, Authorization: `Bearer ${apiKey}` };
 
       const modelsUrl = `${normalizedBase}/models${fingerprintSuffix}`;
       const res = await fetchWithTimeout(modelsUrl, {
         method: "GET",
         headers: {
-          "x-api-key": apiKey,
+          ...probeAuthHeaders,
           "anthropic-version": "2023-06-01",
-          "Authorization": `Bearer ${apiKey}`,
           ...fingerprintHeaders
         }
       });
@@ -150,9 +159,8 @@ export async function POST(request) {
         const chatRes = await fetchWithTimeout(`${normalizedBase}/chat/completions${fingerprintSuffix}`, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${apiKey}`,
+            ...probeAuthHeaders,
             "Content-Type": "application/json",
-            "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
             ...fingerprintHeaders
           },

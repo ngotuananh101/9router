@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { deleteProviderConnectionsByProvider, deleteProviderNode, getProviderConnections, getProviderNodeById, updateProviderConnection, updateProviderNode } from "@/models";
-import { compatibleNodeToProviderSpecificData } from "@/lib/providerNormalization";
+import {
+  compatibleNodeToProviderSpecificData,
+  normalizeCustomHeaders,
+  normalizeUrlSuffix,
+} from "@/lib/providerNormalization";
 
 // PUT /api/provider-nodes/[id] - Update provider node
 export async function PUT(request, { params }) {
@@ -64,13 +68,12 @@ export async function PUT(request, { params }) {
       if (authHeader !== undefined && !["x-api-key", "bearer"].includes(authHeader)) {
         return NextResponse.json({ error: "Invalid auth header" }, { status: 400 });
       }
-      updates.claudeFingerprint = claudeFingerprint === true;
-      updates.urlSuffix = typeof urlSuffix === "string" ? urlSuffix.trim() : "";
-      updates.authHeader = authHeader === "bearer" ? "bearer" : "x-api-key";
-      updates.customHeaders =
-        customHeaders && typeof customHeaders === "object" && !Array.isArray(customHeaders)
-          ? { ...customHeaders }
-          : {};
+      // Only overwrite fields the caller sent: a partial update (or a stale
+      // caller) must not silently wipe a stored fingerprint.
+      if (claudeFingerprint !== undefined) updates.claudeFingerprint = claudeFingerprint === true;
+      if (urlSuffix !== undefined) updates.urlSuffix = normalizeUrlSuffix(urlSuffix);
+      if (authHeader !== undefined) updates.authHeader = authHeader === "bearer" ? "bearer" : "x-api-key";
+      if (customHeaders !== undefined) updates.customHeaders = normalizeCustomHeaders(customHeaders);
     }
 
     const updated = await updateProviderNode(id, updates);

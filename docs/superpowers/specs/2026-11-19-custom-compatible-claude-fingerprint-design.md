@@ -140,13 +140,14 @@ DefaultExecutor, for anthropic-compatible nodes only:
 
 - If providerSpecificData.claudeFingerprint is true, skip the
   existing strip block entirely.
-- Append providerSpecificData.urlSuffix, if any, after /messages
-  in buildUrl.
+- Append providerSpecificData.urlSuffix after /messages in buildUrl,
+  but only when claudeFingerprint is true: with the switch off the
+  node behaves exactly as before, even if a suffix is stored.
 - In buildHeaders, merge providerSpecificData.customHeaders after
   auth and after the Claude-model beta logic, so user edits win
   over the computed beta flags. Reserved headers are never taken
-  from customHeaders: x-api-key, Authorization, Content-Type and
-  Accept are always set by the executor.
+  from customHeaders: x-api-key, Authorization, Content-Type,
+  Accept and anthropic-version are always set by the executor.
 - Auth header follows providerSpecificData.authHeader: x-api-key
   raw (default, plus the existing extra Bearer for third-party
   gateways) or Authorization Bearer only.
@@ -156,7 +157,9 @@ DefaultExecutor, for anthropic-compatible nodes only:
 POST /api/provider-nodes/validate accepts the same four fields.
 When claudeFingerprint is true, the /models probe and the chat
 fallback probe send the custom headers and the URL suffix, so
-Check reflects what real requests will send.
+Check reflects what real requests will send. The probes send the
+same auth shape as real requests: bearer mode sends Authorization
+only, x-api-key mode sends both.
 
 ### Security notes
 
