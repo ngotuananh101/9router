@@ -32,7 +32,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name, prefix, apiType, baseUrl, type } = body;
+    const { name, prefix, apiType, baseUrl, type, claudeFingerprint, urlSuffix, authHeader, customHeaders } = body;
 
     if (!name?.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -86,12 +86,23 @@ export async function POST(request) {
         sanitizedBaseUrl = sanitizedBaseUrl.slice(0, -9); // remove /messages
       }
 
+      if (authHeader !== undefined && !["x-api-key", "bearer"].includes(authHeader)) {
+        return NextResponse.json({ error: "Invalid auth header" }, { status: 400 });
+      }
+
       const node = await createProviderNode({
         id: `${ANTHROPIC_COMPATIBLE_PREFIX}${generateId()}`,
         type: "anthropic-compatible",
         prefix: prefix.trim(),
         baseUrl: sanitizedBaseUrl,
         name: name.trim(),
+        claudeFingerprint: claudeFingerprint === true,
+        urlSuffix: typeof urlSuffix === "string" ? urlSuffix.trim() : "",
+        authHeader: authHeader === "bearer" ? "bearer" : "x-api-key",
+        customHeaders:
+          customHeaders && typeof customHeaders === "object" && !Array.isArray(customHeaders)
+            ? { ...customHeaders }
+            : {},
       });
       return NextResponse.json({ node }, { status: 201 });
     }

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { deleteProviderConnectionsByProvider, deleteProviderNode, getProviderConnections, getProviderNodeById, updateProviderConnection, updateProviderNode } from "@/models";
+import { compatibleNodeToProviderSpecificData } from "@/lib/providerNormalization";
 
 // PUT /api/provider-nodes/[id] - Update provider node
 export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, prefix, apiType, baseUrl } = body;
+    const { name, prefix, apiType, baseUrl, claudeFingerprint, urlSuffix, authHeader, customHeaders } = body;
     const node = await getProviderNodeById(id);
 
     if (!node) {
@@ -58,20 +59,39 @@ export async function PUT(request, { params }) {
       updates.apiType = apiType;
     }
 
+    // Claude fingerprint fields live on Anthropic-compatible nodes only.
+    if (node.type === "anthropic-compatible") {
+      if (authHeader !== undefined && !["x-api-key", "bearer"].includes(authHeader)) {
+        return NextResponse.json({ error: "Invalid auth header" }, { status: 400 });
+      }
+      updates.claudeFingerprint = claudeFingerprint === true;
+      updates.urlSuffix = typeof urlSuffix === "string" ? urlSuffix.trim() : "";
+      updates.authHeader = authHeader === "bearer" ? "bearer" : "x-api-key";
+      updates.customHeaders =
+        customHeaders && typeof customHeaders === "object" && !Array.isArray(customHeaders)
+          ? { ...customHeaders }
+          : {};
+    }
+
     const updated = await updateProviderNode(id, updates);
 
     const connections = await getProviderConnections({ provider: id });
-    await Promise.all(connections.map((connection) => (
-      updateProviderConnection(connection.id, {
+    await Promise.all(connections.map((connection) => {
+      const syncData = node.type === "anthropic-compatible"
+        ? compatibleNodeToProviderSpecificData(updated)
+        : {
+            prefix: prefix.trim(),
+            apiType: node.type === "openai-compatible" ? apiType : undefined,
+            baseUrl: sanitizedBaseUrl,
+            nodeName: updated.name,
+          };
+      return updateProviderConnection(connection.id, {
         providerSpecificData: {
           ...(connection.providerSpecificData || {}),
-          prefix: prefix.trim(),
-          apiType: node.type === "openai-compatible" ? apiType : undefined,
-          baseUrl: sanitizedBaseUrl,
-          nodeName: updated.name,
-        }
-      })
-    )));
+          ...syncData,
+        },
+      });
+    }));
 
     return NextResponse.json({ node: updated });
   } catch (error) {

@@ -166,4 +166,41 @@ describe("compatible provider connections API", () => {
     expectCompatibleConnection(storedConnections[0], ctx.node, { apiType: "chat" });
     expectCompatibleConnection(storedConnections[1], ctx.node, { apiType: "chat" });
   });
+
+  it("copies the fingerprint fields from an Anthropic-compatible node to the new connection", async () => {
+    const ctx = await setupTestContext({
+      id: "anthropic-compatible-fingerprint",
+      type: "anthropic-compatible",
+      name: "AgentRouter Fingerprint Node",
+      prefix: "arf",
+      baseUrl: "https://agentrouter.org/v1",
+      claudeFingerprint: true,
+      urlSuffix: "?beta=true",
+      authHeader: "x-api-key",
+      customHeaders: { "X-App": "cli" },
+    });
+    cleanup = ctx.cleanup;
+
+    const response = await ctx.POST(makeRequest(ctx.node.id));
+    const body = await response.json();
+    const storedConnections = await ctx.getProviderConnections({ provider: ctx.node.id });
+
+    expect(response.status).toBe(201);
+    expect(storedConnections).toHaveLength(1);
+    expect(body.connection.providerSpecificData).toMatchObject({
+      prefix: "arf",
+      baseUrl: "https://agentrouter.org/v1",
+      nodeName: "AgentRouter Fingerprint Node",
+      claudeFingerprint: true,
+      urlSuffix: "?beta=true",
+      authHeader: "x-api-key",
+      customHeaders: { "X-App": "cli" },
+    });
+    expect(storedConnections[0].providerSpecificData).toMatchObject({
+      claudeFingerprint: true,
+      urlSuffix: "?beta=true",
+      authHeader: "x-api-key",
+      customHeaders: { "X-App": "cli" },
+    });
+  });
 });

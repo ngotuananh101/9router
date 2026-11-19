@@ -92,4 +92,30 @@ describe("provider nodes with Claude fingerprint fields", () => {
     expect(mapped.apiType).toBe("chat");
     expect(mapped.claudeFingerprint).toBe(false);
   });
+
+  it("compatibleNodeToProviderSpecificData carries the fingerprint fields when the node has them", async () => {
+    const { compatibleNodeToProviderSpecificData } = await import(
+      "@/lib/providerNormalization.js"
+    );
+
+    const mapped = compatibleNodeToProviderSpecificData({
+      name: "AgentRouter custom",
+      prefix: "agentrouter",
+      baseUrl: "https://agentrouter.org/v1",
+      claudeFingerprint: true,
+      urlSuffix: "?beta=true",
+      authHeader: "bearer",
+      customHeaders: { "X-App": "cli" },
+    });
+
+    expect(mapped).toEqual({
+      prefix: "agentrouter",
+      baseUrl: "https://agentrouter.org/v1",
+      nodeName: "AgentRouter custom",
+      claudeFingerprint: true,
+      urlSuffix: "?beta=true",
+      authHeader: "bearer",
+      customHeaders: { "X-App": "cli" },
+    });
+  });
 });

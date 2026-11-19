@@ -8,7 +8,7 @@ import {
 } from "@/models";
 import { APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { AI_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers";
-import { normalizeProviderId, normalizeProviderSpecificData } from "@/lib/providerNormalization";
+import { normalizeProviderId, normalizeProviderSpecificData, compatibleNodeToProviderSpecificData } from "@/lib/providerNormalization";
 import { toProviderConnectionResponse } from "@/lib/providerConnectionResponse";
 
 export const dynamic = "force-dynamic";
@@ -146,11 +146,7 @@ export async function POST(request) {
       if (!node) {
         return NextResponse.json({ error: "Anthropic Compatible node not found" }, { status: 404 });
       }
-      providerSpecificData = {
-        prefix: node.prefix,
-        baseUrl: node.baseUrl,
-        nodeName: node.name,
-      };
+      providerSpecificData = compatibleNodeToProviderSpecificData(node);
     } else if (isCustomEmbeddingProvider(provider)) {
       const node = await getProviderNodeById(provider);
       if (!node) {
