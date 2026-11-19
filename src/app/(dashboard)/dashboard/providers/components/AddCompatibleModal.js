@@ -47,6 +47,7 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
     ...(config.hasApiType ? { apiType: "chat" } : {}),
     baseUrl: config.defaultBaseUrl,
     claudeFingerprint: false,
+    codexFingerprint: false,
     urlSuffix: "",
     authHeader: "x-api-key",
     customHeaders: {},
@@ -58,7 +59,6 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
   const [checkModelId, setCheckModelId] = useState("");
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
-  const [fingerprintDefaults, setFingerprintDefaults] = useState(null);
 
   // openai: reset baseUrl when apiType changes; anthropic: reset checks when opened
   useEffect(() => {
@@ -72,11 +72,13 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
   }, [config.hasApiType ? formData.apiType : isOpen]);
 
   const loadFingerprintDefaults = async () => {
-    if (fingerprintDefaults) return fingerprintDefaults;
     const res = await fetch("/api/provider-nodes/fingerprint-defaults");
-    const defaults = await res.json();
-    setFingerprintDefaults(defaults);
-    return defaults;
+    return res.json();
+  };
+
+  const loadCodexFingerprintDefaults = async () => {
+    const res = await fetch("/api/provider-nodes/codex-fingerprint-defaults");
+    return res.json();
   };
 
   const applyFingerprintDefaults = (defaults) => {
@@ -90,12 +92,7 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
 
   const handleFingerprintToggle = async (checked) => {
     setFormData((prev) => ({ ...prev, claudeFingerprint: checked }));
-    if (
-      checked &&
-      !fingerprintDefaults &&
-      Object.keys(formData.customHeaders).length === 0 &&
-      !formData.urlSuffix
-    ) {
+    if (checked) {
       try {
         const defaults = await loadFingerprintDefaults();
         applyFingerprintDefaults(defaults);
@@ -105,36 +102,19 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
     }
   };
 
-  const handleResetFingerprint = async () => {
-    try {
-      const defaults = await loadFingerprintDefaults();
-      applyFingerprintDefaults(defaults);
-    } catch (error) {
-      console.log("Error loading fingerprint defaults:", error);
-    }
-  };
-
-  const updateCustomHeader = (index, field, value) => {
-    const rows = Object.entries(formData.customHeaders);
-    rows[index][field === "name" ? 0 : 1] = value;
-    setFormData((prev) => ({ ...prev, customHeaders: Object.fromEntries(rows) }));
-  };
-
-  const removeCustomHeader = (index) => {
-    const rows = Object.entries(formData.customHeaders).filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, customHeaders: Object.fromEntries(rows) }));
-  };
-
-  const addCustomHeader = () => {
-    setFormData((prev) => {
-      let name = "X-Custom-Header";
-      let n = 2;
-      while (Object.prototype.hasOwnProperty.call(prev.customHeaders, name)) {
-        name = `X-Custom-Header-${n}`;
-        n += 1;
+  const handleCodexFingerprintToggle = async (checked) => {
+    setFormData((prev) => ({ ...prev, codexFingerprint: checked }));
+    if (checked) {
+      try {
+        const defaults = await loadCodexFingerprintDefaults();
+        setFormData((prev) => ({
+          ...prev,
+          customHeaders: { ...(defaults.customHeaders || {}) },
+        }));
+      } catch (error) {
+        console.log("Error loading Codex fingerprint defaults:", error);
       }
-      return { ...prev, customHeaders: { ...prev.customHeaders, [name]: "" } };
-    });
+    }
   };
 
   const fingerprintPayload = !config.hasApiType
@@ -144,7 +124,10 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
         authHeader: formData.authHeader,
         customHeaders: formData.customHeaders,
       }
-    : {};
+    : {
+        codexFingerprint: formData.codexFingerprint,
+        customHeaders: formData.customHeaders,
+      };
 
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.prefix.trim() || !formData.baseUrl.trim()) return;
@@ -242,7 +225,13 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
             label="API Type"
             options={API_TYPE_OPTIONS}
             value={formData.apiType}
-            onChange={(e) => setFormData({ ...formData, apiType: e.target.value })}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                apiType: e.target.value,
+                ...(e.target.value !== "responses" ? { codexFingerprint: false } : {}),
+              })
+            }
           />
         )}
         <Input
@@ -252,6 +241,14 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
           placeholder={config.defaultBaseUrl}
           hint={config.baseUrlHint}
         />
+        {config.hasApiType && formData.apiType === "responses" && (
+          <Toggle
+            checked={formData.codexFingerprint}
+            onChange={handleCodexFingerprintToggle}
+            label="Send as Codex"
+            description="Requests carry the full Codex fingerprint. Only use this for gateways that require it."
+          />
+        )}
         {!config.hasApiType && (
           <Toggle
             checked={formData.claudeFingerprint}
@@ -275,39 +272,6 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
               value={formData.authHeader}
               onChange={(e) => setFormData({ ...formData, authHeader: e.target.value })}
             />
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-text-main">Custom headers</span>
-              {Object.entries(formData.customHeaders).map(([name, value], index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    value={name}
-                    onChange={(e) => updateCustomHeader(index, "name", e.target.value)}
-                    placeholder="Header name"
-                    className="flex-1"
-                  />
-                  <Input
-                    value={value}
-                    onChange={(e) => updateCustomHeader(index, "value", e.target.value)}
-                    placeholder="Value"
-                    className="flex-1"
-                  />
-                  <Button variant="ghost" onClick={() => removeCustomHeader(index)}>
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              <Button variant="secondary" onClick={addCustomHeader} className="w-full sm:w-auto">
-                Add header
-              </Button>
-            </div>
-            <p className="text-xs text-text-muted">
-              Do not paste API keys here. Custom headers are stored with the node, not in the secret store.
-            </p>
-            <div>
-              <Button variant="secondary" onClick={handleResetFingerprint}>
-                Reset to defaults
-              </Button>
-            </div>
           </div>
         )}
         <Input
