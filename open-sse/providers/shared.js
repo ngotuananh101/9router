@@ -62,6 +62,22 @@ export function getClaudeFingerprintDefaults() {
   };
 }
 
+// Codex CLI version seen by OpenAI's backend — single source for the Version /
+// User-Agent identity headers. Bump when the installed codex CLI is upgraded.
+export const CODEX_CLI_VERSION = "0.167.1";
+
+// Fingerprint defaults for custom OpenAI-compatible nodes: the Codex preset.
+// Returns a fresh object on every call so callers can edit it without mutating the shared constant.
+export function getCodexFingerprintDefaults() {
+  return {
+    customHeaders: {
+      originator: "codex_cli_rs",
+      "User-Agent": `codex_cli_rs/${CODEX_CLI_VERSION}`,
+      version: CODEX_CLI_VERSION,
+    },
+  };
+}
+
 const ANTHROPIC_BETA_BASE = [
   "claude-code-20250219",
   "oauth-2025-04-20",
